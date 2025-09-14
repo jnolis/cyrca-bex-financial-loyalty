@@ -3,6 +3,7 @@ library(glue)
 library(patchwork)
 library(gt)
 library(haven)
+library(dtplyr)
 
 read_cust_raw <- function(){
   read_csv("C:/Data/raw/cyrca_bex_customer.csv", col_types = cols(
@@ -76,7 +77,10 @@ read_from_cache <- function(path, fn, ...){
 
 post_process_tx <- function(df){
   df |>
-    rename(booking_code = boooking_code)
+    rename(booking_code = boooking_code,
+           lob = line_of_business,
+           gbv = gross_booking_amount_usd) |>
+    mutate(lob = str_to_lower(lob))
 }
 
 
@@ -105,12 +109,22 @@ process_ccids <- function(data){
 
 
 read_data <- function(){
+  message("reading customers")
+  cust <- read_cust_raw()
+  message("reading transactions")
+  tx <- read_tx_raw()
+  message("processing transactions")
+  tx <- tx |> post_process_tx()
   data <- 
-    list(cust = read_cust(),
-         tx = read_tx() |> post_process_tx()
+    list(cust = cust,
+         tx = tx
     )
   
+  message("processing customer ids")
   data <- process_ccids(data)
+  
+  message("done reading data")
+  data
 }
 
 write_data_to_cache <- function(data){
@@ -120,5 +134,14 @@ write_data_to_cache <- function(data){
 }
 
 read_data_from_cache <- function(data){
-  map(c("cust","tx","ccids"),~arrow::read_parquet(glue("C:/data/raw_cache/{.x}.parquet")))
+  file_names <- 
+    fs::dir_ls("C:/data/raw_cache") |>
+    str_remove("\\.parquet$") |>
+    str_remove(".*/")
+  if(length(file_names) == 0){
+    stop("raw_cache is empty. Try running `read_data |> write_data_to_cache()`")
+  }
+  file_names |> 
+  map(~arrow::read_parquet(glue("C:/data/raw_cache/{.x}.parquet"))) |>
+    set_names(file_names)
 }

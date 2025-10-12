@@ -128,6 +128,7 @@ read_data <- function(){
 }
 
 write_data_to_cache <- function(data){
+  fs::dir_create("C:/data/raw_cache")
   iwalk(data, function(.x,.y){
     arrow::write_parquet(.x,glue("C:/data/raw_cache/{.y}.parquet"))
   })
@@ -139,7 +140,7 @@ read_data_from_cache <- function(data){
     str_remove("\\.parquet$") |>
     str_remove(".*/")
   if(length(file_names) == 0){
-    stop("raw_cache is empty. Try running `read_data |> write_data_to_cache()`")
+    stop("raw_cache is empty. Try running `read_data() |> write_data_to_cache()`")
   }
   file_names |> 
   map(~arrow::read_parquet(glue("C:/data/raw_cache/{.x}.parquet"))) |>

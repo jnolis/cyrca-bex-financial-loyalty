@@ -11,15 +11,9 @@ ex_frac <- config$extract_percent_of_total
 output_folder <- "C:/Users/themeanvaluetheorem/Dropbox/BEX Jacqueline/model-output"
 
 data <- read_data_from_cache()
+survey_data <- read_survey_data()
 
 run_id <- format(Sys.time(),"%Y%m%d---%H%M%S")
-
-# Assume all customers are in a single segment
-segments <- data$cust |>
-  distinct(ccid) |>
-  mutate(segment = "all")
-
-
 
 # REMOVE THE SAMPLING AND JOIN WHEN READY TO USE FULL
 
@@ -36,7 +30,10 @@ if(is_testing){
   tx_raw <- data$tx
 }
 
-  
+# Assume all customers are in a single segment
+typing_tool <- get_typing_tool(survey_data)
+segments <- get_segments(tx_raw, typing_tool)
+
 
   
 tx <- 
@@ -49,8 +46,7 @@ tx <-
   rename(gbvlc = gbv) |>
   filter(unit_count > 0)
 
-# the year we are going to analyze the transactions
-analysis_year <- 2024
+
 
 # how many units each customer earned in the previous year
 prev_year_units <-
@@ -114,14 +110,12 @@ unit_calculation_data <-
   # join to the customer attributes
   left_join(prev_year_units, join_by(ccid)) |>
   left_join(current_year_units, join_by(ccid)) |>
+  left_join(bookings_lob, join_by(booking_code)) |>
   
+  as_tibble() |>
   # fill zeros and cap the upper bounds
   mutate(across(starts_with("units_earned_"),~replace_na(.x,0))) |>
-  mutate(across(starts_with("units_earned_"),~if_else(.x>max_units_earned_group,max_units_earned_group,.x))) |>
-  
-  # get the LOB attributes
-  left_join(bookings_lob, join_by(booking_code)) |>
-  as_tibble()
+  mutate(across(starts_with("units_earned_"),~if_else(.x>max_units_earned_group,max_units_earned_group,.x)))
 
 # OUTPUT
 

@@ -207,7 +207,7 @@ apply_typing_transformation <- function(tx){
     group_by(ccid, lob) |>
     summarize(gbv = sum(gbv),
               .groups = "drop") |>
-    mutate(gbv_cut = if_else(gbv > 10000, 10000, floor(gbv/1000)*1000)) |>
+    mutate(gbv_cut = if_else(gbv > 8000, 8000, floor(gbv/1000)*1000)) |>
     select(-gbv) |>
     pivot_wider(names_from = lob, values_from = gbv_cut, names_sort = TRUE, values_fill = 0, names_prefix = "lob_") |>
     rename_with(~glue("{.x}_gbv_cut"), starts_with("lob_"))
@@ -245,8 +245,10 @@ get_segments <- function(tx_raw, typing_tool){
     stop("Some customers not placed in segments")
   }
   adj_tx |>
+    lazy_dt() |>
     group_by(ccid) |>
     slice_sample(n=1,weight_by= segment_frac) |>
     ungroup() |>
-    select(ccid, segment = segment_nm)
+    select(ccid, segment = segment_nm) |>
+    as_tibble()
 }

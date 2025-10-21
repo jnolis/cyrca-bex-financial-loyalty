@@ -23,7 +23,7 @@ if(is_testing){
   tx_raw <-
     data$tx |>
     distinct(ccid) |>
-    sample_n(1000) |>
+    sample_n(100000) |>
     inner_join(data$tx, join_by(ccid))
 } else {
   message("Using all transactions")

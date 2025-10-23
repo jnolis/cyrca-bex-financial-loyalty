@@ -197,6 +197,7 @@ read_survey_data <- function(){
   
   survey_append_data$questions <- questions
   survey_append_data$answers <- answers
+  survey_append_data$cid_to_ccid <- cid_to_ccid
   
   survey_append_data
 }

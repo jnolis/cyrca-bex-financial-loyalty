@@ -4,7 +4,7 @@ options(scipen=999)
 
 config <- jsonlite::read_json("config.json")
 
-is_testing <- TRUE
+is_testing <- FALSE
 
 ex_frac <- config$extract_percent_of_total
 
@@ -17,6 +17,12 @@ run_id <- format(Sys.time(),"%Y%m%d---%H%M%S")
 
 unit_type <- "trip-element"
 
+members <-
+  data$cust |>
+  select(ccid, join_date = first_ever_bex_ok_join_date) |>
+  mutate(join_date = if_else(join_date == "null",NA_character_, join_date)) |>
+  filter(!is.na(join_date) & year(join_date) <= analysis_year) |>
+  select(ccid)
 
 print_debug_values <- function(debug_values){
   debug_values |>
@@ -30,6 +36,7 @@ print_debug_values <- function(debug_values){
 
 debug_values <- list()
 
+# get raw data values ---------------
 debug_values$gbvlc_raw <-
   data$tx |>
   filter(year(begin_use_date) == analysis_year, !is.na(lob), eg_brand_code == "BEX", lob %in% c("air","lodging","car"), unit_count > 0) |>
@@ -45,7 +52,28 @@ debug_values$trip_elements_raw <-
   filter(year(begin_use_date) == analysis_year, !is.na(lob), eg_brand_code == "BEX", lob %in% c("air","lodging","car"), unit_count > 0) |>
   with(sum(unit_count)/ex_frac) 
 
+
+# get member values ----------------
+
+debug_values$gbvlc_raw_members <-
+  data$tx |>
+  filter(year(begin_use_date) == analysis_year, !is.na(lob), eg_brand_code == "BEX", lob %in% c("air","lodging","car"), unit_count > 0) |>
+  semi_join(members,join_by(ccid)) |>
+  with(sum(gbv)/ex_frac)
+
+debug_values$bookings_raw_members <-
+  data$tx |>
+  filter(year(begin_use_date) == analysis_year, !is.na(lob), eg_brand_code == "BEX", lob %in% c("air","lodging","car"), unit_count > 0) |>
+  semi_join(members,join_by(ccid)) |>
+  with(n_distinct(booking_code)/ex_frac)
+
+debug_values$trip_elements_raw_members <-
+  data$tx |>
+  filter(year(begin_use_date) == analysis_year, !is.na(lob), eg_brand_code == "BEX", lob %in% c("air","lodging","car"), unit_count > 0) |>
+  semi_join(members,join_by(ccid)) |>
+  with(sum(unit_count)/ex_frac) 
 # REMOVE THE SAMPLING AND JOIN WHEN READY TO USE FULL
+
 
 
 if(is_testing){
@@ -84,6 +112,7 @@ tx <-
   lazy_dt() |>
   inner_join(segments, join_by(ccid)) |>
   left_join(tx_raw_packages, join_by(booking_code)) |>
+  semi_join(members,join_by(ccid)) |>
   as_tibble() |>
   mutate(is_package = replace_na(is_package, FALSE)) |>
   filter(!is.na(lob), eg_brand_code == "BEX", lob %in% c("air","lodging","car")) |>
@@ -246,7 +275,7 @@ compute_aggregated_bookings_for_simulator <- function(.x){
       packages = sum(is_package) / ex_frac,
       across(starts_with("lob_"),~sum(.x)/ ex_frac),
       .groups = "drop") |>
-    mutate(across(where(is.numeric),~.x |> round() |> as.integer()))
+    mutate(across(where(is.numeric),~.x |> round()))
 }
 
 aggregated_bookings_for_simulator <- map_dfr(unit_calculation_dfs, compute_aggregated_bookings_for_simulator)
@@ -267,7 +296,7 @@ compute_aggregated_members_for_simulator <- function(.x){
       packages = sum(is_package) / ex_frac,
       across(starts_with("lob_"),~sum(.x)/ ex_frac),
       .groups = "drop") |>
-    mutate(across(where(is.numeric),~.x |> round() |> as.integer()))
+    mutate(across(where(is.numeric),~.x |> round()))
 }
 
 aggregated_members_for_simulator <- map_dfr(unit_calculation_dfs, compute_aggregated_members_for_simulator)

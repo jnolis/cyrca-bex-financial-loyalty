@@ -4,7 +4,7 @@ options(scipen=999)
 
 config <- jsonlite::read_json("config.json")
 
-is_testing <- FALSE
+is_testing <- TRUE
 
 ex_frac <- config$extract_percent_of_total
 
@@ -68,13 +68,26 @@ if(nrow(tx_raw |> anti_join(segments,join_by(ccid))) > 0){
   stop("Some customers missing segments")
 }
   
+
+tx_raw_packages <-
+  tx_raw |>
+  lazy_dt() |>
+  filter(!is.na(lob), eg_brand_code == "BEX", lob %in% c("air","lodging","car")) |>
+  distinct(booking_code, lob) |>
+  count(booking_code) |>
+  mutate(is_package = n > 1) |>
+  as_tibble()
+  
+
 tx <- 
   tx_raw |>
   lazy_dt() |>
   inner_join(segments, join_by(ccid)) |>
+  left_join(tx_raw_packages, join_by(booking_code)) |>
   as_tibble() |>
+  mutate(is_package = replace_na(is_package, FALSE)) |>
   filter(!is.na(lob), eg_brand_code == "BEX", lob %in% c("air","lodging","car")) |>
-  mutate(lob_ext = lob |> factor(levels = c("air","lodging","car"))) |>
+  mutate(lob_ext = glue("{lob}{if_else(is_package,'_package','')}") |> factor(levels = c("air","lodging","car", "air_package", "lodging_package", "car_package"))) |>
   # mutate(lob_ext = 
   #          if_else(package_indicator > 0,glue("package_{lob_ext}"),lob_ext) |>
   #          factor(levels = c("lodging", "air", "other", "package_lodging", "package_air", "package_other"))
@@ -144,8 +157,11 @@ bookings_lob <-
   as_tibble() |>
   select(booking_code, 
          lob_gbvlc_air, lob_gbvlc_lodging, lob_gbvlc_car,
+         lob_gbvlc_air_package, lob_gbvlc_lodging_package, lob_gbvlc_car_package, 
          lob_bookings_air, lob_bookings_lodging, lob_bookings_car,
-         lob_trip_elements_air, lob_trip_elements_lodging, lob_trip_elements_car
+         lob_bookings_air_package, lob_bookings_lodging_package, lob_bookings_car_package,
+         lob_trip_elements_air, lob_trip_elements_lodging, lob_trip_elements_car,
+         lob_trip_elements_air_package, lob_trip_elements_lodging_package, lob_trip_elements_car_package
          )
 
 # how many units before we just group them all together
@@ -229,7 +245,8 @@ compute_aggregated_bookings_for_simulator <- function(.x){
       trip_elements = sum(trip_elements) / ex_frac,
       packages = sum(is_package) / ex_frac,
       across(starts_with("lob_"),~sum(.x)/ ex_frac),
-      .groups = "drop")
+      .groups = "drop") |>
+    mutate(across(where(is.numeric),round))
 }
 
 aggregated_bookings_for_simulator <- map_dfr(unit_calculation_dfs, compute_aggregated_bookings_for_simulator)
@@ -249,7 +266,8 @@ compute_aggregated_members_for_simulator <- function(.x){
       trip_elements = sum(trip_elements) / ex_frac,
       packages = sum(is_package) / ex_frac,
       across(starts_with("lob_"),~sum(.x)/ ex_frac),
-      .groups = "drop")
+      .groups = "drop") |>
+    mutate(across(where(is.numeric),round))
 }
 
 aggregated_members_for_simulator <- map_dfr(unit_calculation_dfs, compute_aggregated_members_for_simulator)
@@ -263,6 +281,13 @@ debug_values_output <- print_debug_values(debug_values)
 print(debug_values_output)
 
 fs::dir_create(glue("{output_folder}/{run_id}"))
-write_csv(aggregated_bookings_for_simulator, glue("{output_folder}/{run_id}/bookings.csv") )
-write_csv(aggregated_members_for_simulator,  glue("{output_folder}/{run_id}/members.csv")  )
+
+rename_output <- function(.z) .z |> rename_with(~str_replace_all(.x,"_"," "))
+aggregated_bookings_for_simulator |>
+  rename_output() |>
+  write_csv(glue("{output_folder}/{run_id}/bookings.csv"))
+
+aggregated_members_for_simulator |>
+  rename_output() |>
+  write_csv(glue("{output_folder}/{run_id}/members.csv")  )
 write_csv(debug_values_output,  glue("{output_folder}/{run_id}/debug.csv")  )

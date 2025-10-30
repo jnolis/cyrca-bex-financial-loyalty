@@ -246,7 +246,7 @@ compute_aggregated_bookings_for_simulator <- function(.x){
       packages = sum(is_package) / ex_frac,
       across(starts_with("lob_"),~sum(.x)/ ex_frac),
       .groups = "drop") |>
-    mutate(across(where(is.numeric),round))
+    mutate(across(where(is.numeric),~.x |> round() |> as.integer()))
 }
 
 aggregated_bookings_for_simulator <- map_dfr(unit_calculation_dfs, compute_aggregated_bookings_for_simulator)
@@ -267,7 +267,7 @@ compute_aggregated_members_for_simulator <- function(.x){
       packages = sum(is_package) / ex_frac,
       across(starts_with("lob_"),~sum(.x)/ ex_frac),
       .groups = "drop") |>
-    mutate(across(where(is.numeric),round))
+    mutate(across(where(is.numeric),~.x |> round() |> as.integer()))
 }
 
 aggregated_members_for_simulator <- map_dfr(unit_calculation_dfs, compute_aggregated_members_for_simulator)
@@ -283,6 +283,7 @@ print(debug_values_output)
 fs::dir_create(glue("{output_folder}/{run_id}"))
 
 rename_output <- function(.z) .z |> rename_with(~str_replace_all(.x,"_"," "))
+
 aggregated_bookings_for_simulator |>
   rename_output() |>
   write_csv(glue("{output_folder}/{run_id}/bookings.csv"))

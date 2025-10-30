@@ -235,6 +235,9 @@ get_typing_tool <- function(survey_data){
 }
 
 get_segments <- function(tx_raw, typing_tool){
+  
+  all_ccids <- distinct(tx_raw, ccid)
+  
   adj_tx <- tx_raw |> 
     apply_typing_transformation() |>
     left_join(typing_tool, 
@@ -251,5 +254,7 @@ get_segments <- function(tx_raw, typing_tool){
     slice_sample(n=1,weight_by= segment_frac) |>
     ungroup() |>
     select(ccid, segment = segment_nm) |>
-    as_tibble()
+    as_tibble() |>
+    full_join(all_ccids, join_by(ccid)) |>
+    mutate(segment = replace_na(segment,"Low Frequency"))
 }

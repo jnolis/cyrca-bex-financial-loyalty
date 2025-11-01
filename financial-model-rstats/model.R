@@ -15,8 +15,6 @@ survey_data <- read_survey_data()
 
 run_id <- format(Sys.time(),"%Y%m%d---%H%M%S")
 
-unit_type <- "trip-element"
-
 members <-
   data$cust |>
   select(ccid, join_date = first_ever_bex_ok_join_date) |>
@@ -265,15 +263,12 @@ unit_calculation_dfs = list(
 
 compute_aggregated_bookings_for_simulator <- function(.x){
   .x |>
-    group_by(segment, units_earned_prev_year, units_earned_start_of_booking) |>
+    group_by(segment, units_earned_prev_year, units_earned_current_year, units_earned_start_of_booking) |>
     summarize(
       unit_type = unit_type[1],
-      num_members = NA_real_,
       gbvlc = sum(gbvlc) / ex_frac,
       bookings = sum(bookings) / ex_frac,
       trip_elements = sum(trip_elements) / ex_frac,
-      packages = sum(is_package) / ex_frac,
-      across(starts_with("lob_"),~sum(.x)/ ex_frac),
       .groups = "drop") |>
     mutate(across(where(is.numeric),~.x |> round()))
 }

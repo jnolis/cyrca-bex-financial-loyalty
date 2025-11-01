@@ -266,9 +266,7 @@ compute_aggregated_bookings_for_simulator <- function(.x){
     group_by(segment, units_earned_prev_year, units_earned_current_year, units_earned_start_of_booking) |>
     summarize(
       unit_type = unit_type[1],
-      gbvlc = sum(gbvlc) / ex_frac,
       bookings = sum(bookings) / ex_frac,
-      trip_elements = sum(trip_elements) / ex_frac,
       .groups = "drop") |>
     mutate(across(where(is.numeric),~.x |> round()))
 }

@@ -154,9 +154,9 @@ int_to_tier <- function(loyalty_tier){
 prev_year_tier <-
   tx |>
   lazy_dt() |>
-  filter(year(begin_use_date) == analysis_year) |>
+  filter(year(begin_use_date) < analysis_year) |>
   group_by(ccid) |>
-  summarize(tier_prev_year = int_to_tier(min(loyalty_tier)))
+  summarize(tier_prev_year = int_to_tier(max(loyalty_tier))) |>
   as_tibble()
 
 
@@ -233,7 +233,7 @@ unit_calculation_data <-
   left_join(prev_year_tier, join_by(ccid)) |>
   left_join(current_year_units, join_by(ccid)) |>
   left_join(bookings_lob, join_by(booking_code)) |>
-  
+  mutate(tier_prev_year = replace_na(tier_prev_year,"Blue")) |>
   as_tibble() |>
   # fill zeros and cap the upper bounds
   mutate(across(c(starts_with("trip_elements_"),starts_with("bookings")),~replace_na(.x,0))) |>

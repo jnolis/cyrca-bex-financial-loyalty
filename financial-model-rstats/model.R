@@ -4,7 +4,7 @@ options(scipen=999)
 
 config <- jsonlite::read_json("config.json")
 
-is_testing <- TRUE
+is_testing <- FALSE
 
 ex_frac <- config$extract_percent_of_total
 
@@ -121,8 +121,7 @@ tx <-
   #          ) |>
   rename(gbvlc = gbv) |>
   filter(unit_count > 0) |>
-  rename(trip_elements = unit_count) |>
-  mutate(is_first_two_months = if_else(month(begin_use_date) < 3,"Y","N"))
+  rename(trip_elements = unit_count)
 
 
 debug_values$gbvlc_tx <-
@@ -140,16 +139,6 @@ debug_values$trip_elements_tx <-
   filter(year(begin_use_date) == analysis_year) |>
   with(sum(trip_elements)/ex_frac) 
 
-
-# how many units each customer earned two years ago
-prev_2_year_units <-
-  tx |>
-  lazy_dt() |>
-  filter(year(begin_use_date) == analysis_year - 2) |>
-  group_by(ccid) |>
-  summarize(trip_elements_prev_2_year = sum(trip_elements),
-            bookings_prev_2_year = n_distinct(booking_code)) |>
-  as_tibble()
 
 # how many units each customer earned in the previous year
 prev_year_units <-
@@ -203,7 +192,7 @@ bookings_lob <-
          )
 
 # how many units before we just group them all together
-max_units_earned_group <- 35
+max_units_earned_group <- 45
 
 # a table with a row for each booking with the units and gbv
 unit_calculation_data <-
@@ -217,7 +206,6 @@ unit_calculation_data <-
   summarize(trip_elements = sum(trip_elements),
             bookings = 1,
             begin_use_date = min(begin_use_date),
-            is_first_two_months = first(is_first_two_months),
             is_package = n_distinct(lob_ext) > 1,
             gbvlc = sum(gbvlc),
          .groups="drop") |>
@@ -232,7 +220,6 @@ unit_calculation_data <-
   
   # join to the customer attributes
   left_join(prev_year_units, join_by(ccid)) |>
-  left_join(prev_2_year_units, join_by(ccid)) |>
   left_join(current_year_units, join_by(ccid)) |>
   left_join(bookings_lob, join_by(booking_code)) |>
   
@@ -254,7 +241,6 @@ unit_calculation_data_trip_elements <-
     unit_calculation_data |>
     mutate(
       units_earned_prev_year = trip_elements_prev_year,
-      units_earned_prev_2_year = trip_elements_prev_2_year,
       units_earned_current_year = trip_elements_current_year,
       units_earned_start_of_booking = trip_elements_start_of_booking,
       unit_type = "trip_elements"
@@ -264,7 +250,6 @@ unit_calculation_data_bookings <-
     unit_calculation_data |>
     mutate(
       units_earned_prev_year = bookings_prev_year,
-      units_earned_prev_2_year = bookings_prev_2_year,
       units_earned_current_year = bookings_current_year,
       units_earned_start_of_booking = bookings_start_of_booking,
       unit_type = "bookings"
@@ -278,7 +263,7 @@ unit_calculation_dfs = list(
 
 compute_aggregated_bookings_for_simulator <- function(.x){
   .x |>
-    group_by(segment, units_earned_prev_year, units_earned_current_year, units_earned_prev_2_year, units_earned_start_of_booking, is_first_two_months) |>
+    group_by(segment, units_earned_prev_year, units_earned_current_year, units_earned_start_of_booking) |>
     summarize(
       unit_type = unit_type[1],
       bookings = sum(bookings) / ex_frac,
@@ -288,7 +273,9 @@ compute_aggregated_bookings_for_simulator <- function(.x){
 
 aggregated_bookings_for_simulator <- map_dfr(unit_calculation_dfs, compute_aggregated_bookings_for_simulator)
 
+debug_values$gbvlc_book_for_sim <- aggregated_bookings_for_simulator |> with(sum(gbvlc)/length(unit_calculation_dfs))
 debug_values$bookings_book_for_sim <- aggregated_bookings_for_simulator |> with(sum(bookings)/length(unit_calculation_dfs))
+debug_values$trip_elements_book_for_sim <- aggregated_bookings_for_simulator |> with(sum(trip_elements)/length(unit_calculation_dfs))
 
 compute_aggregated_members_for_simulator <- function(.x){
   .x |>

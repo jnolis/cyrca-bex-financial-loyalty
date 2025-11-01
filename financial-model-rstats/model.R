@@ -141,25 +141,24 @@ debug_values$trip_elements_tx <-
   with(sum(trip_elements)/ex_frac) 
 
 
-# how many units each customer earned two years ago
-prev_2_year_units <-
+int_to_tier <- function(loyalty_tier){
+  case_when(
+    loyalty_tier == 1 ~ "Blue",
+    loyalty_tier == 2 ~ "Silver",
+    loyalty_tier == 3 ~ "Gold",
+    loyalty_tier == 5 ~ "Platinum",
+    TRUE ~ "Blue"
+  )
+}
+
+prev_year_tier <-
   tx |>
   lazy_dt() |>
-  filter(year(begin_use_date) == analysis_year - 2) |>
+  filter(year(begin_use_date) == analysis_year) |>
   group_by(ccid) |>
-  summarize(trip_elements_prev_2_year = sum(trip_elements),
-            bookings_prev_2_year = n_distinct(booking_code)) |>
+  summarize(tier_prev_year = int_to_tier(min(loyalty_tier)))
   as_tibble()
 
-# how many units each customer earned in the previous year
-prev_year_units <-
-  tx |>
-  lazy_dt() |>
-  filter(year(begin_use_date) == analysis_year - 1) |>
-  group_by(ccid) |>
-  summarize(trip_elements_prev_year = sum(trip_elements),
-            bookings_prev_year = n_distinct(booking_code)) |>
-  as_tibble()
 
 # how many units each customer earned in the current year
 current_year_units <-
@@ -231,8 +230,7 @@ unit_calculation_data <-
   ungroup() |>
   
   # join to the customer attributes
-  left_join(prev_year_units, join_by(ccid)) |>
-  left_join(prev_2_year_units, join_by(ccid)) |>
+  left_join(prev_year_tier, join_by(ccid)) |>
   left_join(current_year_units, join_by(ccid)) |>
   left_join(bookings_lob, join_by(booking_code)) |>
   
@@ -253,8 +251,6 @@ debug_values$trip_elements_unit_calculation <- unit_calculation_data |> with(sum
 unit_calculation_data_trip_elements <-
     unit_calculation_data |>
     mutate(
-      units_earned_prev_year = trip_elements_prev_year,
-      units_earned_prev_2_year = trip_elements_prev_2_year,
       units_earned_current_year = trip_elements_current_year,
       units_earned_start_of_booking = trip_elements_start_of_booking,
       unit_type = "trip_elements"
@@ -263,8 +259,6 @@ unit_calculation_data_trip_elements <-
 unit_calculation_data_bookings <-
     unit_calculation_data |>
     mutate(
-      units_earned_prev_year = bookings_prev_year,
-      units_earned_prev_2_year = bookings_prev_2_year,
       units_earned_current_year = bookings_current_year,
       units_earned_start_of_booking = bookings_start_of_booking,
       unit_type = "bookings"
@@ -278,7 +272,7 @@ unit_calculation_dfs = list(
 
 compute_aggregated_bookings_for_simulator <- function(.x){
   .x |>
-    group_by(segment, units_earned_prev_year, units_earned_current_year, units_earned_prev_2_year, units_earned_start_of_booking, is_first_two_months) |>
+    group_by(segment, tier_prev_year, units_earned_current_year, units_earned_start_of_booking, is_first_two_months) |>
     summarize(
       unit_type = unit_type[1],
       bookings = sum(bookings) / ex_frac,
@@ -292,7 +286,7 @@ debug_values$bookings_book_for_sim <- aggregated_bookings_for_simulator |> with(
 
 compute_aggregated_members_for_simulator <- function(.x){
   .x |>
-    group_by(segment, units_earned_prev_year, units_earned_current_year) |>
+    group_by(segment, tier_prev_year, units_earned_current_year) |>
     summarize(
       unit_type = unit_type[1],
       num_members = n_distinct(ccid) / ex_frac,

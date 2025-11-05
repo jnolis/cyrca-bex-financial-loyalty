@@ -33,12 +33,12 @@ read_cust_raw <- function(path = NULL){
   ), na = c("","NA","null"))
 }
 
-read_tx_raw <- function(path=null){
+read_tx_raw <- function(path=NULL){
   if(is.null(path)){
     path <- "C:/Data/raw"
   }
-  fs::dir_ls(path, regexp = "_tx.*\\.csv$") |>
-    map(~read_csv(.x, col_types = cols(
+  fs::dir_ls(path, regexp = "_tx[0-9]+of[0-9]\\.csv$") |>
+    map(~read_csv(.x, col_types = cols_only(
       booking_date_pst = col_date(format = ""),
       boooking_code = col_character(),
       eg_brand_code = col_character(),

@@ -273,9 +273,7 @@ compute_aggregated_bookings_for_simulator <- function(.x){
 
 aggregated_bookings_for_simulator <- map_dfr(unit_calculation_dfs, compute_aggregated_bookings_for_simulator)
 
-debug_values$gbvlc_book_for_sim <- aggregated_bookings_for_simulator |> with(sum(gbvlc)/length(unit_calculation_dfs))
 debug_values$bookings_book_for_sim <- aggregated_bookings_for_simulator |> with(sum(bookings)/length(unit_calculation_dfs))
-debug_values$trip_elements_book_for_sim <- aggregated_bookings_for_simulator |> with(sum(trip_elements)/length(unit_calculation_dfs))
 
 compute_aggregated_members_for_simulator <- function(.x){
   .x |>

@@ -215,10 +215,18 @@ apply_typing_transformation <- function(tx){
 }
 
 get_typing_tool <- function(survey_data){
+  
+  
   survey_segments <- survey_data$answers |> 
     select(ccid, segments_v1) |> 
     filter(!is.na(ccid)) |>
-    mutate(segments_v1 = as_factor(segments_v1) |> fct_recode(`High Hotel / High Flight` = "High Hotel / Hight Flight"))
+    mutate(segments_v1 = as_factor(segments_v1))
+  
+  if("High Hotel / Hight Flight" %in% levels(survey_segments$segments_v1)){
+    survey_segments <- 
+      survey_segments |>
+      mutate(segments_v1 = aegments_v1 |> fct_recode(`High Hotel / High Flight` = "High Hotel / Hight Flight"))
+  }
   
   segment_raw_data <- 
     survey_data$tx |>
@@ -234,7 +242,10 @@ get_typing_tool <- function(survey_data){
     select(lob_air_gbv_cut, lob_lodging_gbv_cut, segment_nm = segments_v1, segment_frac)
 }
 
-get_segments <- function(tx_raw, typing_tool){
+get_segments <- function(tx_raw, typing_tool, missing_val = NULL){
+  if(is.null(missing_val)){
+    missing_val <- "Low Frequency"
+  }
   
   all_ccids <- distinct(tx_raw, ccid)
   
@@ -248,6 +259,10 @@ get_segments <- function(tx_raw, typing_tool){
   if(any(is.na(adj_tx$segment_nm))){
     stop("Some customers not placed in segments")
   }
+  
+  if(!(missing_val %in% levels(adj_tx$segment_nm))){
+    stop(glue("value for missing segments ({missing_val}) not in levels ({paste0(levels(adj_tx$segment_nm),collapse=', ')})"))
+  }
   adj_tx |>
     lazy_dt() |>
     group_by(ccid) |>
@@ -256,5 +271,35 @@ get_segments <- function(tx_raw, typing_tool){
     select(ccid, segment = segment_nm) |>
     as_tibble() |>
     full_join(all_ccids, join_by(ccid)) |>
-    mutate(segment = replace_na(segment,"Low Frequency"))
+    mutate(segment = replace_na(segment,missing_val))
+}
+
+override_segmentation <- function(survey_data, segmentation_name){
+  alt_segments <- 
+    read_csv("C:\\Data\\survey_raw\\BEX New Segment for Model Input.csv", col_types = cols(.default= col_character())) |>
+    janitor::clean_names() |>
+    rename(cid = cid_external_cid) |>
+    inner_join(survey_data$cid_to_ccid, join_by(cid))
+
+  available_segments <- setdiff(names(alt_segments),c("cid","ccid", "parallax_hashed_email_address_parallax_hashed_email_address"))
+  
+  message(glue("Overriding with `{segmentation_name}`. Available override segments: {paste0(available_segments,collapse=', ')}"))
+  if(!(segmentation_name %in% available_segments)){
+    stop("Segmentation not a valid selection")
+  }
+  alt_segments$segments_v1 <- alt_segments[[segmentation_name]]
+  
+
+                                
+  alt_segments <- 
+    alt_segments |> 
+    select(ccid, segments_v1) |>
+    group_by(ccid) |>
+    filter(n() == 1)
+  
+  survey_data$answers <- survey_data$answers |>
+    select(-segments_v1) |>
+    inner_join(alt_segments, join_by(ccid))
+  
+  survey_data
 }

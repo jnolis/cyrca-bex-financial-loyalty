@@ -1,19 +1,38 @@
 source("utils.R")
 
+
+
 options(scipen=999)
 
 config <- jsonlite::read_json("config.json")
 
-is_testing <- FALSE
+is_testing <- TRUE
 
 ex_frac <- config$extract_percent_of_total
 
 output_folder <- "C:/Users/themeanvaluetheorem/Dropbox/BEX Jacqueline/model-output"
 
-data <- read_data_from_cache()
-survey_data <- read_survey_data()
+
+override_segmentation_name <- "tier_expanded"
+override_segmentation_missing_level <- "Blue"
 
 run_id <- format(Sys.time(),"%Y%m%d---%H%M%S")
+if(!is.null(override_segmentation_name)){
+  run_id <- glue("{run_id}---segment-{override_segmentation_name}")
+}
+
+# ---------------
+data <- read_data_from_cache()
+
+survey_data <- read_survey_data()
+if(!is.null(override_segmentation_name)){
+  survey_data <- override_segmentation(survey_data, override_segmentation_name)
+}
+
+# --------------------
+
+
+
 
 members <-
   data$cust |>
@@ -31,45 +50,45 @@ print_debug_values <- function(debug_values){
     select(-type) |>
     pivot_wider(names_from = metric, values_from = value)
 }
-
-debug_values <- list()
+# 
+# debug_values <- list()
 
 # get raw data values ---------------
-debug_values$gbvlc_raw <-
-  data$tx |>
-  filter(year(begin_use_date) == analysis_year, !is.na(lob), eg_brand_code == "BEX", lob %in% c("air","lodging","car"), unit_count > 0) |>
-  with(sum(gbv)/ex_frac)
-
-debug_values$bookings_raw <-
-  data$tx |>
-  filter(year(begin_use_date) == analysis_year, !is.na(lob), eg_brand_code == "BEX", lob %in% c("air","lodging","car"), unit_count > 0) |>
-  with(n_distinct(booking_code)/ex_frac)
-
-debug_values$trip_elements_raw <-
-  data$tx |>
-  filter(year(begin_use_date) == analysis_year, !is.na(lob), eg_brand_code == "BEX", lob %in% c("air","lodging","car"), unit_count > 0) |>
-  with(sum(unit_count)/ex_frac) 
+# debug_values$gbvlc_raw <-
+#   data$tx |>
+#   filter(year(begin_use_date) == analysis_year, !is.na(lob), eg_brand_code == "BEX", lob %in% c("air","lodging","car"), unit_count > 0) |>
+#   with(sum(gbv)/ex_frac)
+# 
+# debug_values$bookings_raw <-
+#   data$tx |>
+#   filter(year(begin_use_date) == analysis_year, !is.na(lob), eg_brand_code == "BEX", lob %in% c("air","lodging","car"), unit_count > 0) |>
+#   with(n_distinct(booking_code)/ex_frac)
+# 
+# debug_values$trip_elements_raw <-
+#   data$tx |>
+#   filter(year(begin_use_date) == analysis_year, !is.na(lob), eg_brand_code == "BEX", lob %in% c("air","lodging","car"), unit_count > 0) |>
+#   with(sum(unit_count)/ex_frac) 
 
 
 # get member values ----------------
-
-debug_values$gbvlc_raw_members <-
-  data$tx |>
-  filter(year(begin_use_date) == analysis_year, !is.na(lob), eg_brand_code == "BEX", lob %in% c("air","lodging","car"), unit_count > 0) |>
-  semi_join(members,join_by(ccid)) |>
-  with(sum(gbv)/ex_frac)
-
-debug_values$bookings_raw_members <-
-  data$tx |>
-  filter(year(begin_use_date) == analysis_year, !is.na(lob), eg_brand_code == "BEX", lob %in% c("air","lodging","car"), unit_count > 0) |>
-  semi_join(members,join_by(ccid)) |>
-  with(n_distinct(booking_code)/ex_frac)
-
-debug_values$trip_elements_raw_members <-
-  data$tx |>
-  filter(year(begin_use_date) == analysis_year, !is.na(lob), eg_brand_code == "BEX", lob %in% c("air","lodging","car"), unit_count > 0) |>
-  semi_join(members,join_by(ccid)) |>
-  with(sum(unit_count)/ex_frac) 
+# 
+# debug_values$gbvlc_raw_members <-
+#   data$tx |>
+#   filter(year(begin_use_date) == analysis_year, !is.na(lob), eg_brand_code == "BEX", lob %in% c("air","lodging","car"), unit_count > 0) |>
+#   semi_join(members,join_by(ccid)) |>
+#   with(sum(gbv)/ex_frac)
+# 
+# debug_values$bookings_raw_members <-
+#   data$tx |>
+#   filter(year(begin_use_date) == analysis_year, !is.na(lob), eg_brand_code == "BEX", lob %in% c("air","lodging","car"), unit_count > 0) |>
+#   semi_join(members,join_by(ccid)) |>
+#   with(n_distinct(booking_code)/ex_frac)
+# 
+# debug_values$trip_elements_raw_members <-
+#   data$tx |>
+#   filter(year(begin_use_date) == analysis_year, !is.na(lob), eg_brand_code == "BEX", lob %in% c("air","lodging","car"), unit_count > 0) |>
+#   semi_join(members,join_by(ccid)) |>
+#   with(sum(unit_count)/ex_frac) 
 # REMOVE THE SAMPLING AND JOIN WHEN READY TO USE FULL
 
 
@@ -88,7 +107,7 @@ if(is_testing){
 
 # Assume all customers are in a single segment
 typing_tool <- get_typing_tool(survey_data)
-segments <- get_segments(tx_raw, typing_tool)
+segments <- get_segments(tx_raw, typing_tool, override_segmentation_missing_level)
 
 if(nrow(tx_raw |> anti_join(segments,join_by(ccid))) > 0){
   stop("Some customers missing segments")
@@ -123,32 +142,21 @@ tx <-
   filter(unit_count > 0) |>
   rename(trip_elements = unit_count)
 
-
-debug_values$gbvlc_tx <-
-  tx |>
-  filter(year(begin_use_date) == analysis_year) |>
-  with(sum(gbvlc)/ex_frac)
-
-debug_values$bookings_tx <-
-  tx |>
-  filter(year(begin_use_date) == analysis_year) |>
-  with(n_distinct(booking_code)/ex_frac)
-
-debug_values$trip_elements_tx <-
-  tx |>
-  filter(year(begin_use_date) == analysis_year) |>
-  with(sum(trip_elements)/ex_frac) 
-
-
-# how many units each customer earned in the previous year
-prev_year_units <-
-  tx |>
-  lazy_dt() |>
-  filter(year(begin_use_date) == analysis_year - 1) |>
-  group_by(ccid) |>
-  summarize(trip_elements_prev_year = sum(trip_elements),
-            bookings_prev_year = n_distinct(booking_code)) |>
-  as_tibble()
+# 
+# debug_values$gbvlc_tx <-
+#   tx |>
+#   filter(year(begin_use_date) == analysis_year) |>
+#   with(sum(gbvlc)/ex_frac)
+# 
+# debug_values$bookings_tx <-
+#   tx |>
+#   filter(year(begin_use_date) == analysis_year) |>
+#   with(n_distinct(booking_code)/ex_frac)
+# 
+# debug_values$trip_elements_tx <-
+#   tx |>
+#   filter(year(begin_use_date) == analysis_year) |>
+#   with(sum(trip_elements)/ex_frac) 
 
 # how many units each customer earned in the current year
 current_year_units <-
@@ -160,13 +168,27 @@ current_year_units <-
             bookings_current_year = n_distinct(booking_code)) |>
   as_tibble()
 
-debug_values$bookings_current_year <- sum(current_year_units$bookings_current_year)/ex_frac
-debug_values$trip_elements_current_year <- sum(current_year_units$trip_elements_current_year)/ex_frac
+# how many units each customer earned in the previous year
+prev_year_units <-
+  tx |>
+  lazy_dt() |>
+  semi_join(current_year_units, join_by(ccid)) |>
+  filter(year(begin_use_date) == analysis_year - 1) |>
+  group_by(ccid) |>
+  summarize(trip_elements_prev_year = sum(trip_elements),
+            bookings_prev_year = n_distinct(booking_code)) |>
+  as_tibble()
+
+
+
+# debug_values$bookings_current_year <- sum(current_year_units$bookings_current_year)/ex_frac
+# debug_values$trip_elements_current_year <- sum(current_year_units$trip_elements_current_year)/ex_frac
 
 # for each booking get the LOB gbv and is_lob (to count the bookings)
 bookings_lob <- 
   tx |>
   lazy_dt() |>
+  semi_join(current_year_units, join_by(ccid)) |>
   group_by(booking_code, lob_ext) |>
   summarize(gbvlc = sum(gbvlc),
             bookings = 1,
@@ -198,6 +220,7 @@ max_units_earned_group <- 45
 unit_calculation_data <-
   tx |>
   lazy_dt() |>
+  semi_join(current_year_units, join_by(ccid)) |>
   # get just the current year and valid bookings
   filter(year(begin_use_date) == analysis_year) |>
   
@@ -219,8 +242,8 @@ unit_calculation_data <-
   ungroup() |>
   
   # join to the customer attributes
+  inner_join(current_year_units, join_by(ccid)) |>
   left_join(prev_year_units, join_by(ccid)) |>
-  left_join(current_year_units, join_by(ccid)) |>
   left_join(bookings_lob, join_by(booking_code)) |>
   
   as_tibble() |>
@@ -229,11 +252,11 @@ unit_calculation_data <-
   mutate(across(c(starts_with("trip_elements_"),starts_with("bookings")),~if_else(.x>max_units_earned_group,max_units_earned_group,.x)))
 
 
-
-
-debug_values$gbvlc_unit_calculation <- unit_calculation_data |> with(sum(gbvlc)/ex_frac)
-debug_values$bookings_unit_calculation <- unit_calculation_data |> with(sum(bookings)/ex_frac)
-debug_values$trip_elements_unit_calculation <- unit_calculation_data |> with(sum(trip_elements)/ex_frac)
+# 
+# 
+# debug_values$gbvlc_unit_calculation <- unit_calculation_data |> with(sum(gbvlc)/ex_frac)
+# debug_values$bookings_unit_calculation <- unit_calculation_data |> with(sum(bookings)/ex_frac)
+# debug_values$trip_elements_unit_calculation <- unit_calculation_data |> with(sum(trip_elements)/ex_frac)
 
 # OUTPUT
 
@@ -272,8 +295,8 @@ compute_aggregated_bookings_for_simulator <- function(.x){
 }
 
 aggregated_bookings_for_simulator <- map_dfr(unit_calculation_dfs, compute_aggregated_bookings_for_simulator)
-
-debug_values$bookings_book_for_sim <- aggregated_bookings_for_simulator |> with(sum(bookings)/length(unit_calculation_dfs))
+# 
+# debug_values$bookings_book_for_sim <- aggregated_bookings_for_simulator |> with(sum(bookings)/length(unit_calculation_dfs))
 
 compute_aggregated_members_for_simulator <- function(.x){
   .x |>
@@ -291,14 +314,14 @@ compute_aggregated_members_for_simulator <- function(.x){
 }
 
 aggregated_members_for_simulator <- map_dfr(unit_calculation_dfs, compute_aggregated_members_for_simulator)
-
-debug_values$gbvlc_mem_for_sim <- aggregated_members_for_simulator |> with(sum(gbvlc)/length(unit_calculation_dfs))
-debug_values$bookings_mem_for_sim <- aggregated_members_for_simulator |> with(sum(bookings)/length(unit_calculation_dfs))
-debug_values$trip_elements_mem_for_sim <- aggregated_members_for_simulator |> with(sum(trip_elements)/length(unit_calculation_dfs))
-
-debug_values_output <- print_debug_values(debug_values)
-
-print(debug_values_output)
+# 
+# debug_values$gbvlc_mem_for_sim <- aggregated_members_for_simulator |> with(sum(gbvlc)/length(unit_calculation_dfs))
+# debug_values$bookings_mem_for_sim <- aggregated_members_for_simulator |> with(sum(bookings)/length(unit_calculation_dfs))
+# debug_values$trip_elements_mem_for_sim <- aggregated_members_for_simulator |> with(sum(trip_elements)/length(unit_calculation_dfs))
+# 
+# debug_values_output <- print_debug_values(debug_values)
+# 
+# print(debug_values_output)
 
 fs::dir_create(glue("{output_folder}/{run_id}"))
 
@@ -311,4 +334,5 @@ aggregated_bookings_for_simulator |>
 aggregated_members_for_simulator |>
   rename_output() |>
   write_csv(glue("{output_folder}/{run_id}/members.csv")  )
-write_csv(debug_values_output,  glue("{output_folder}/{run_id}/debug.csv")  )
+
+# write_csv(debug_values_output,  glue("{output_folder}/{run_id}/debug.csv")  )

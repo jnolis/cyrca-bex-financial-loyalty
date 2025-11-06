@@ -225,7 +225,7 @@ get_typing_tool <- function(survey_data){
   if("High Hotel / Hight Flight" %in% levels(survey_segments$segments_v1)){
     survey_segments <- 
       survey_segments |>
-      mutate(segments_v1 = aegments_v1 |> fct_recode(`High Hotel / High Flight` = "High Hotel / Hight Flight"))
+      mutate(segments_v1 = segments_v1 |> fct_recode(`High Hotel / High Flight` = "High Hotel / Hight Flight"))
   }
   
   segment_raw_data <- 

@@ -6,7 +6,7 @@ options(scipen=999)
 
 config <- jsonlite::read_json("config.json")
 
-is_testing <- TRUE
+is_testing <- FALSE
 
 ex_frac <- config$extract_percent_of_total
 
@@ -27,6 +27,11 @@ data <- read_data_from_cache()
 survey_data <- read_survey_data()
 if(!is.null(override_segmentation_name)){
   survey_data <- override_segmentation(survey_data, override_segmentation_name)
+}
+
+if(override_segmentation_name == "tier_expanded"){
+  message("removing people with segment 'non-member'")
+  survey_data$answers <- survey_data$answers |> filter(segments_v1 != "Non-Member")
 }
 
 # --------------------
